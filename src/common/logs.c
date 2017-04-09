@@ -5,7 +5,7 @@
 
 #include "common.h"
 
-bool init_zlog(const char *conf)
+bool arx_log_init(const char *conf)
 {
 	int err;
 	const char *env = getenv("ARX_ZLOG_CONF");
@@ -20,4 +20,15 @@ bool init_zlog(const char *conf)
 	}
 
 	return true;
+}
+
+zlog_category_t *arx_log_category(const char *cat)
+{
+	zlog_category_t *zcat = zlog_get_category(cat);
+	if (!zcat) {
+		fprintf(stderr, "zlog_get_category failed - '%s'\n", cat);
+		exit(1);
+	}
+
+	return zcat;
 }
