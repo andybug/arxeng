@@ -1,3 +1,4 @@
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -6,12 +7,15 @@
 #include <unistd.h>
 
 #include <msgpack.h>
+#include <sodium.h>
 #include <zlog.h>
 #include <zmq.h>
 
 #include "../common/common.h"
 #include "client.h"
 
+
+/* structures */
 
 struct net_main_state {
 	/* logging */
@@ -23,7 +27,12 @@ struct net_main_state {
 	msgpack_sbuffer sbuf;
 	/* general */
 	uint64_t client_id;
+	unsigned char client_pub[crypto_box_PUBLICKEYBYTES];
+	unsigned char client_sec[crypto_box_SECRETKEYBYTES];
 };
+
+
+/* cleanup */
 
 static void net_main_cleanup(void *_s)
 {
@@ -37,6 +46,22 @@ static void net_main_cleanup(void *_s)
 	zlog_warn(s->zcat, "net_main thread terminated");
 }
 
+
+/* helpers */
+
+static void gen_key_pair(struct net_main_state *s)
+{
+	unsigned char hash[crypto_generichash_BYTES];
+	uint64_t *hash_uint64 = (uint64_t *)&hash;
+
+	crypto_box_keypair(s->client_pub, s->client_sec);
+	crypto_generichash(
+	    hash, sizeof(hash), s->client_pub, sizeof(s->client_pub), NULL, 0);
+	s->client_id = *hash_uint64;
+
+	zlog_info(s->zcat, "client_id %" PRIx64, s->client_id);
+}
+
 static void pack_header(struct net_main_state *s)
 {
 	msgpack_packer pk;
@@ -47,17 +72,21 @@ static void pack_header(struct net_main_state *s)
 	msgpack_pack_uint64(&pk, s->client_id);
 }
 
+
+/* main loop */
+
 void *net_main(void *_v)
 {
 	(void)_v;
 	struct net_main_state s;
 	int rc;
 
-	s.client_id = 0x1234567890abcdef;
-
 	/* configure logging */
 	s.zcat = arx_log_category("net");
 	zlog_info(s.zcat, "connecting to server");
+
+	/* create identity */
+	gen_key_pair(&s);
 
 	/* establish connection to server */
 	s.context = zmq_ctx_new();

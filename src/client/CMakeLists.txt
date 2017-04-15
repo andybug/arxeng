@@ -9,6 +9,7 @@ target_link_libraries(
   arxeng-common
   msgpackc
   pthread
+  sodium
   zlog
   zmq
 )
